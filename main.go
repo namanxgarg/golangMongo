@@ -1,27 +1,48 @@
 package main
 
 import (
+	"context"
+	"log"
 	"net/http"
+	"time"
 
 	"golangMongo/controllers"
 
 	"github.com/julienschmidt/httprouter"
-	"gopkg.in/mgo.v2"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
 	r := httprouter.New()
-	uc := controllers.NewUserController(getSession())
-	r.GET("/user/{id}", uc.GetUser)
+	client := getMongoClient()
+	uc := controllers.NewUserController(client)
+
+	r.GET("/user/:id", uc.GetUser)
 	r.POST("/user", uc.CreateUser)
-	r.DELETE("/user/{id}", uc.DeleteUser)
+	r.DELETE("/user/:id", uc.DeleteUser)
+
+	log.Println("Server running on port 8000")
 	http.ListenAndServe(":8000", r)
 }
 
-func getSession() *mgo.Session {
-	s, err := mgo.Dial("mongodb://localhost:27107")
+func getMongoClient() *mongo.Client {
+	// Create a new MongoDB client
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
-	return s
+
+	// Test the connection
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		log.Fatalf("Failed to ping MongoDB: %v", err)
+	}
+
+	log.Println("Connected to MongoDB")
+	return client
 }
